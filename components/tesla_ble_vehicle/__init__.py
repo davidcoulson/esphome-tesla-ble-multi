@@ -122,6 +122,7 @@ CONF_INFOTAINMENT_SLEEP_TIMEOUT = "infotainment_sleep_timeout"
 CONF_WAKE_ON_BOOT = "wake_on_boot"
 CONF_PRESENCE_TIMEOUT = "presence_timeout"
 CONF_EXCLUDE_ENTITIES = "exclude_entities"
+CONF_DISCOVERY_RETRY_INTERVAL = "discovery_retry_interval"
 
 # Tesla key roles
 TESLA_ROLES = {
@@ -467,6 +468,16 @@ CONFIG_SCHEMA = (
             # Leave entities out of the firmware to save flash (ids as in the
             # entity lists above, e.g. tpms_soft_warning_front_left).
             cv.Optional(CONF_EXCLUDE_ENTITIES, default=[]): validate_exclude_entities,
+            # While a car has no MAC at all, a search that ends "Not found"
+            # is retried after this long (e.g. the car was away at boot).
+            # "never" turns it off; a known MAC is never searched for again.
+            cv.Optional(CONF_DISCOVERY_RETRY_INTERVAL, default="1h"): cv.Any(
+                cv.one_of("never", lower=True),
+                cv.All(
+                    cv.positive_time_period_milliseconds,
+                    cv.Range(min=cv.TimePeriod(minutes=5), max=cv.TimePeriod(hours=24)),
+                ),
+            ),
             cv.Optional(CONF_PRESENCE_TIMEOUT, default="5min"): cv.All(
                 cv.positive_time_period_milliseconds,
                 cv.Range(min=cv.TimePeriod(minutes=1), max=cv.TimePeriod(hours=1)),
@@ -751,6 +762,8 @@ async def to_code(config):
     cg.add(var.set_infotainment_sleep_timeout(config[CONF_INFOTAINMENT_SLEEP_TIMEOUT] * 1000))
     cg.add(var.set_wake_on_boot(config[CONF_WAKE_ON_BOOT]))
     cg.add(var.set_presence_timeout(int(config[CONF_PRESENCE_TIMEOUT].total_milliseconds)))
+    retry = config[CONF_DISCOVERY_RETRY_INTERVAL]
+    cg.add(var.set_discovery_retry_interval(0 if isinstance(retry, str) else int(retry.total_milliseconds)))
     
     excluded = set(config[CONF_EXCLUDE_ENTITIES])
     for entities, create in zip(
